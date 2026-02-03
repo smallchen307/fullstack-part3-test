@@ -1,0 +1,7 @@
+POST http://localhost:2999/api/notes
+Content-Type: application/json
+
+{
+  "content": "透過 REST Client 新增的筆記",
+  "important": false
+}
