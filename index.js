@@ -152,10 +152,15 @@ app.post('/api/persons', (request, response) => {
   response.json(newPerson)
 })
 
+// 健康檢查端點
+app.get('/health', (request, response) => {
+  response.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
 
 // === 啟動伺服器 ===
 
-const PORT = 2999
+const PORT = process.env.PORT || 2999
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })
