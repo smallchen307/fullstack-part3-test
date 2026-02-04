@@ -1,3 +1,4 @@
+require('dotenv').config()
 const express = require('express')
 const morgan = require('morgan');
 const app = express()
@@ -23,6 +24,19 @@ morgan.token('body', (req) => JSON.stringify(req.body)); // 將請求體轉換�
 app.use(morgan(':method :url :status :response-time ms - :body')); 
 
 
+// 設定資料庫
+const mongoose = require('mongoose')
+const url = process.env.MONGODB_URI
+
+console.log('connecting to', url)
+
+mongoose.connect(url)
+  .then(result => {
+    console.log('connected to MongoDB')
+  })
+  .catch((error) => {
+    console.log('error connecting to MongoDB:', error.message)
+  })
 
 let persons =[
     { 
