@@ -1,5 +1,3 @@
-// ⬇️⬇️⬇️⬇️⬇️這一大段是mongoose定義⬇️⬇️⬇️⬇️⬇️
-
 require('dotenv').config() //  dotenv是一個可協助你設定環境變數的npm套件，從.env讀取URL
 const mongoose = require('mongoose')
 
@@ -12,7 +10,7 @@ if (!url) {
 }
 
 mongoose.set('strictQuery', false)
-mongoose.connect(url, { dbName: 'noteApp' })
+mongoose.connect(url)
 
 // 配合 notes 練習，定義了筆記模式
 const noteSchema = new mongoose.Schema({
@@ -22,9 +20,6 @@ const noteSchema = new mongoose.Schema({
 
 //定義筆記模型
 const Note = mongoose.model('Note', noteSchema)
-
-// ⬆️⬆️⬆️⬆️⬆️這一大段是mongoose定義⬆️⬆️⬆️⬆️⬆️
-
 
 //借助Note 模型新建一筆資料內容
 const note = new Note({

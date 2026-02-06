@@ -1,21 +1,14 @@
 require('dotenv').config()
 const express = require('express')
 const morgan = require('morgan');
-const app = express()
+const app = express() // 創建 Express 應用程式
+const Person = require('./models/persons') // 引入 Person 模型
+const cors = require('cors'); // 跨域請求設定
 
-//跨域請求設定
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE')
-  res.header('Access-Control-Allow-Headers', 'Content-Type')
-  next()
-})
+app.use(cors());              // 自動加上 Access-Control-Allow-Origin: *
+app.use(express.json());      // 中介軟體 解析JSON
 
-// 中介軟體
-app.use(express.json());   //解析 JSON
-
-// 使用 morgan 中間件 
-app.use(morgan('dev'));  //日誌
+app.use(morgan('dev')); // 中介軟體 紀錄日誌
 
 // 自定義 morgan token 來記錄請求體
 morgan.token('body', (req) => JSON.stringify(req.body)); // 將請求體轉換為 JSON 字串
@@ -24,157 +17,130 @@ morgan.token('body', (req) => JSON.stringify(req.body)); // 將請求體轉換�
 app.use(morgan(':method :url :status :response-time ms - :body')); 
 
 
-// 設定資料庫
-const mongoose = require('mongoose')
-const url = process.env.MONGODB_URI
-
-console.log('connecting to', url)
-
-mongoose.connect(url)
-  .then(result => {
-    console.log('connected to MongoDB')
-  })
-  .catch((error) => {
-    console.log('error connecting to MongoDB:', error.message)
-  })
-
-let persons =[
-    { 
-      "id": "1",
-      "name": "Arto Hellas", 
-      "number": "040-123456"
-    },
-    { 
-      "id": "2",
-      "name": "Ada Lovelace", 
-      "number": "39-44-5323523"
-    },
-    { 
-      "id": "3",
-      "name": "Dan Abramov", 
-      "number": "12-43-234345"
-    },
-    { 
-      "id": "4",
-      "name": "Mary Poppendieck", 
-      "number": "39-23-6423122"
-    },
-    { 
-      "id": "5",
-      "name": "Mary Poppendieck", 
-      "number": "39-23-6423122"
-    },
-    { 
-      "id": "6",
-      "name": "Mary Poppendieck", 
-      "number": "39-23-6423122"
-    },
-    { 
-      "id": "7",
-      "name": "sss", 
-      "number": "123456"
-    }
-  ]
 
 
 // === 設定路由 ===
 
 //訪問根目錄請求
 app.get('/', (request, response) => {
-  response.send('<h1>Hello Coolify!! 123</h1>')
+  response.send('<h1>Hello World!123</h1>')
 })
 
-// 3.1 訪問api/persons請求
-app.get('/api/persons', (request, response) => {
-  response.json(persons)
+//  訪問api/persons請求
+app.get('/api/persons', (request, response,next) => {
+  Person.find({})
+    .then(persons => {
+      response.json(persons)
+    })
+    .catch(error => next(error))
 })
 
-// 3.2 訪問info目錄請求
-app.get('/info', (request, response) => {
-  const numberOfPeople = persons.length;
-  const currentTime = new Date();
-  const infoHtml = `<p>Phonebook has info for ${numberOfPeople} people</p><p>${currentTime}</p>`;
-  response.send(infoHtml);
+// 訪問info目錄請求
+app.get('/info', (request, response,next) => {
+  Person.countDocuments({})
+  .then(count => {
+    const currentTime = new Date();
+    const infoHtml = `<p>Phonebook has info for ${count} people</p><p>${currentTime}</p>`;
+    response.send(infoHtml);
+  })
+  .catch(error => next(error))
 })
 
-// 3.3 訪問文章id請求
-app.get('/api/persons/:id', (request, response) => {
-  const id = request.params.id
-  const person = persons.find(person => person.id === id)
-  if (person) {
-    response.json(person)
-  } else {
-    response.send('<h1>文章不存在!</h1>')
-  }
+// 訪問人物id請求
+app.get('/api/persons/:id', (request, response,next) => {
+  Person.findById(request.params.id)
+    .then(person=>{
+      if(person) {
+        response.json(person)
+      }else {
+        response.status(404).end()
+      }
+    })
+    .catch(error => next(error))
+
 })
 
-//根據id修改人物請求
-app.put('/api/persons/:id', (request, response) => {
-  const id = request.params.id
+// 根據id修改人物請求
+app.put('/api/persons/:id', (request, response, next) => {
   const body = request.body
-  const oldNumber = persons.find(p=>p.id===id)
-  if (!oldNumber) {
-  return response.status(404).json({ error: '找不到聯絡人' });
+
+  const person = {
+    name: body.name,
+    number: body.number,
   }
-  const newNumber = { ...oldNumber, number: body.number?? oldNumber.number} //防呆 沒傳number就用舊的
-    
-  persons = persons.map(person => person.id === id ? newNumber : person)
 
-  response.json(newNumber)
+  Person.findByIdAndUpdate(request.params.id, person, { new: true, runValidators: true, context: 'query' })
+    .then(updatedPerson => {
+      if (updatedPerson) {
+        response.json(updatedPerson)
+      } else {
+        response.status(404).json({ error: '找不到聯絡人' })
+      }
+    })
+    .catch(error => next(error))
 })
 
-// 3.4 根據id刪除人物請求
-app.delete('/api/persons/:id', (request, response) => {
-  const id = request.params.id
-  persons = persons.filter(person => person.id !== id)
-
-  response.status(204).end()
+// 根據id刪除人物請求
+app.delete('/api/persons/:id', (request, response, next) => {
+  Person.findByIdAndDelete(request.params.id)
+    .then(result => {
+      response.status(204).end()
+    })
+    .catch(error => next(error))
 })
 
-// 3.5 設定產生文章ID
-const generateId = () => {
-  const maxId = persons.length > 0
-    ? Math.max(...persons.map(p => Number(p.id)))
-    : 0
-  return String(maxId + 1)
-}
-// 3.5 設定請求新增筆記
-app.post('/api/persons', (request, response) => {
+// 3.5 設定請求新增名單
+app.post('/api/persons', (request, response, next) => {
   const body = request.body
-  
+
   // 3.6 設定空白內容警告
-  if (!body.name || !body.number) { 
+  if (!body.name || !body.number) {
     return response.status(400).json({
       error: 'content missing'
     })
   }
-  // 3.6 設定名稱重複警告
-  if (persons.some(person => person.name === body.name)) {
-    return response.status(400).json({
-      error: 'name must be unique'
+
+  Person.findOne({ name: body.name })
+    .then(existingPerson => {
+      if (existingPerson) {
+        // 如果姓名已存在，則更新號碼
+        const personToUpdate = { number: body.number }
+        Person.findByIdAndUpdate(existingPerson.id, personToUpdate, { new: true, runValidators: true, context: 'query' })
+          .then(updatedPerson => response.json(updatedPerson))
+          .catch(error => next(error))
+      } else {
+        // 如果姓名不存在，則新增聯絡人
+        const newPerson = new Person({ name: body.name, number: body.number })
+        newPerson.save()
+          .then(savedPerson => response.json(savedPerson))
+          .catch(error => next(error))
+      }
     })
-  }
-
-  const newPerson = {
-    name: body.name,
-    number: body.number,
-    id: body.id
-  }
-
-  persons = persons.concat(newPerson) 
-
-  response.json(newPerson)
+    .catch(error => next(error))
 })
 
-// 健康檢查端點
-app.get('/health', (request, response) => {
-  response.json({ status: 'ok', timestamp: new Date().toISOString() })
-})
 
+//錯誤處理中介
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message)
+
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformatted id' })
+  } 
+
+  // 新增：處理 Mongoose 驗證錯誤
+  if (error.name === 'ValidationError') {
+    return response.status(400).json({ error: error.message })
+  }
+
+  next(error)
+}
+
+app.use(errorHandler)
 
 // === 啟動伺服器 ===
 
-const PORT = process.env.PORT || 2999
+const PORT = 2999
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })

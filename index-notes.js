@@ -1,111 +1,99 @@
+require('dotenv').config() // 必須在引入 Note 模型之前
 const express = require('express')
 const app = express()
+const Note = require('./models/note')
 
-//跨域請求設定
-const cors = require('cors');
-
-app.use(cors()); // 自動加上 Access-Control-Allow-Origin: *
-
-app.use(express.json())
-
-let notes = [
-  {
-    id: "1",
-    content: "HTML is easy",
-    important: true
-  },
-  {
-    id: "2",
-    content: "Browser can execute only JavaScript",
-    important: false
-  },
-  {
-    id: "3",
-    content: "GET and POST are the most important methods of HTTP protocol",
-    important: true
-  },
-  {
-    id: "4",
-    content: "亂七八糟的東西",
-    important: true
-  }
-] 
+const cors = require('cors'); // 跨域請求設定
+app.use(cors());              // 自動加上 Access-Control-Allow-Origin: *
+app.use(express.json())       // 中介軟體 解析JSON
 
 // === 設定路由 ===
 
 //訪問根目錄請求
-app.get('/', (request, response) => {
+app.get('/', (request,response) => {
   response.send('<h1>Hello World!</h1>')
 })
 
 //訪問api/notes請求
-app.get('/api/notes', (request, response) => {
-  response.json(notes)
+app.get('/api/notes', (request,response,next) => {
+  Note.find({})
+  .then(notes => {
+    response.json(notes)
+  })
+  .catch(error => next(error))
+  })
+
+//訪問api/notes/id請求
+app.get('/api/notes/:id', (request,response,next) => {
+  Note.findById(request.params.id)
+    .then(note => {
+      if (note) {
+        response.json(note)
+      } else {
+        response.status(404).end()
+      }
+    })
+    .catch(error => next(error))
 })
 
-//訪問文章id請求
-app.get('/api/notes/:id', (request, response) => {
-  const id = request.params.id
-  const note = notes.find(note => note.id === id)
-  if (note) {
-    response.json(note)
-  } else {
-    response.send('<h1>文章不存在!</h1>')
-  }
-})
-
-//根據id修改文章請求
-app.put('/api/notes/:id', (request, response) => {
-  const id = request.params.id
+//根據id修改文章的重要與否 請求
+app.put('/api/notes/:id', (request,response,next) => {
   const body = request.body
-  const oldNote = notes.find(n=>n.id===id)
-  const newNote = { ...oldNote, important: body.important}
-    
-  notes = notes.map(note => note.id === id ? newNote : note)
+  const newNote = { content: body.content, important: body.important }
 
-  response.json(newNote)
+  Note.findByIdAndUpdate(request.params.id,newNote,{ new: true, runValidators: true})
+    .then(updatedNote => {
+      response.json(updatedNote)
+    })
+    .catch(error => next(error))
+
 })
 
-//根據id刪除文章請求
-app.delete('/api/notes/:id', (request, response) => {
-  const id = request.params.id
-  notes = notes.filter(note => note.id !== id)
-
-  response.send('<h1>文章已刪除!</h1>')
+// 根據id刪除文章請求
+app.delete('/api/notes/:id', (request,response,next) => {
+  Note.findByIdAndDelete(request.params.id)
+    .then(result=>{
+      response.status(204).end()
+    })
+    .catch(error => next(error))
 })
 
-//設定產生文章ID
-const generateId = () => {
-  const maxId = notes.length > 0
-    ? Math.max(...notes.map(n => Number(n.id)))
-    : 0
-  return String(maxId + 1)
-}
-//設定請求新增筆記
-app.post('/api/notes', (request, response) => {
+// 設定請求新增筆記
+app.post('/api/notes', (request,response,next) => {
   const body = request.body
 
   if (!body.content) { //設定空白內容警告
-    return response.status(400).json({
-      error: 'content missing'
-    })
+    return response.status(400).json({error: 'content missing'})
   }
 
-  const note = {
+  const newNote = new Note({
     content: body.content,
-    important: body.important || false, //預設false
-    id: generateId(), //引入ID產生器
-  }
+    important: body.important || false,
+  })
 
-  notes = notes.concat(note) 
-
-  response.json(note)
+  newNote.save()
+    .then(savedNote => {
+      response.json(savedNote)
+    })
+    .catch(error => next(error))
 })
 
+//錯誤處理中介
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message)
+
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformatted id' })
+  } else if (error.name === 'ValidationError') {
+    return response.status(400).json({ error: error.message })
+  }
+
+  next(error)
+}
+app.use(errorHandler)
 
 // === 啟動伺服器 ===
-
-const PORT = 2999
+const PORT = process.env.PORT || 2999
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })
